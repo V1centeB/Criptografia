@@ -1,0 +1,10 @@
+Instalaciones necesarias:
+
+pip install kivy
+pip install bcrypt
+pip install cryptography
+pip install pyopenssl
+pip install email-validator
+pip install pysqlite3
+
+Para llevar a cabo la ejecución, una vez realizada las instalaciones, sólo necesitamos ejecutar app.py
