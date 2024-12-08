@@ -64,7 +64,6 @@ class LoginScreen(Screen):
                     verify_screen = self.manager.get_screen('verify')
                     verify_screen.set_token(token)  
                     self.manager.current = 'verify'
-                    self.clear_login_fields()
                 else:
                     show_popup("Error", "Failed to send verification token.")
             else:
