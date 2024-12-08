@@ -1,6 +1,8 @@
 from kivy.app import App
-from interface.screen_manager import MyScreenManager
+
 from core.db_manager import DBManager
+from interface.screen_manager import MyScreenManager
+
 
 class MyApp(App):
     def build(self):

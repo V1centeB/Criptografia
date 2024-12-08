@@ -7,7 +7,7 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.popup import Popup
 from core.db_manager import DBManager
 from core.email_manager import send_verification_token, generate_temporary_token
-from core.auth import Auth  
+from core.auth import Auth
 
 def show_popup(title, message):
     layout = BoxLayout(orientation='vertical')
@@ -64,6 +64,7 @@ class LoginScreen(Screen):
                     verify_screen = self.manager.get_screen('verify')
                     verify_screen.set_token(token)  
                     self.manager.current = 'verify'
+                    self.clear_login_fields()
                 else:
                     show_popup("Error", "Failed to send verification token.")
             else:

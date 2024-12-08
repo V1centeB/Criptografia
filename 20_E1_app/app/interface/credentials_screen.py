@@ -1,16 +1,15 @@
-from kivy.uix.screenmanager import Screen
-from kivy.uix.button import Button
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.textinput import TextInput
-from kivy.uix.label import Label
-from kivy.uix.popup import Popup
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.scrollview import ScrollView
-
-from core.db_manager import DBManager
 from core.crypto_manager import generate_key, encrypt_data, decrypt_data
+from core.db_manager import DBManager
 from core.hmac_manager import generate_hmac, verify_hmac
 from core.security_logger import SecurityLogger
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.label import Label
+from kivy.uix.popup import Popup
+from kivy.uix.screenmanager import Screen
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.textinput import TextInput
 
 logger = SecurityLogger()
 
@@ -53,25 +52,32 @@ class CredentialsScreen(Screen):
         service_user = self.service_user.text
         service_password = self.service_password.text
         username = self.manager.get_screen('login').username.text
+        user_password = self.manager.get_screen('login').password.text
 
         if service and service_user and service_password:
             salt = f"{username}{service_user}".encode('utf-8')
-            key = generate_key('asdfghjklzxcvbnmqw', salt)
 
+            key = generate_key(user_password, salt)
+
+            # Cifrado
             encrypted_user = encrypt_data(service_user, key)
             encrypted_password = encrypt_data(service_password, key)
 
-            hmac_user = generate_hmac(encrypted_user)
-            hmac_password = generate_hmac(encrypted_password)
+            # Generar HMAC
+            hmac_user = generate_hmac(encrypted_user, salt)
+            hmac_password = generate_hmac(encrypted_password, salt)
 
+            # Loggear datos cifrados y HMAC
             logger.log_encrypted_data("Encrypted username", encrypted_user)
             logger.log_encrypted_data("Encrypted password", encrypted_password)
             logger.log_hmac_generation(hmac_user)
             logger.log_hmac_generation(hmac_password)
             logger.log_separator()
 
+            # Guardar en la base de datos
             db_manager = DBManager()
-            db_manager.store_credentials(username, service, encrypted_user, encrypted_password, hmac_user, hmac_password, salt.decode('utf-8'))
+            db_manager.store_credentials(username, service, encrypted_user, encrypted_password, hmac_user,
+                                         hmac_password, salt.decode('utf-8'))
 
             show_popup("Success", "Credentials saved successfully.")
         else:
@@ -79,6 +85,7 @@ class CredentialsScreen(Screen):
 
     def view_credentials(self, instance):
         username = self.manager.get_screen('login').username.text
+        user_password = self.manager.get_screen('login').password.text  # Contraseña del usuario
         db_manager = DBManager()
         credentials = db_manager.get_user_credentials(username)
 
@@ -94,7 +101,8 @@ class CredentialsScreen(Screen):
                 hmac_password = credential[5]
                 salt = credential[6].encode('utf-8')
 
-                key = generate_key('asdfghjklzxcvbnmqw', salt)
+                # Generar la clave usando la contraseña del usuario y el salt
+                key = generate_key(user_password, salt)
 
                 credential_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint_y=None, height=40)
 
@@ -106,10 +114,14 @@ class CredentialsScreen(Screen):
                 toggle_button.color = (1, 1, 1, 1)
 
                 toggle_button.bind(on_press=lambda btn, enc_user=encrypted_user, enc_pass=encrypted_password,
-                                   h_user=hmac_user, h_pass=hmac_password, u_label=user_label, p_label=password_label,
-                                   key=key, salt=salt: self.toggle_visibility(enc_user, enc_pass, h_user, h_pass, u_label, p_label, key, salt, btn))
+                                                   h_user=hmac_user, h_pass=hmac_password, u_label=user_label,
+                                                   p_label=password_label,
+                                                   key=key, salt=salt: self.toggle_visibility(enc_user, enc_pass,
+                                                                                              h_user, h_pass, u_label,
+                                                                                              p_label, key, salt, btn))
 
-                credential_layout.add_widget(Label(text=f"Service: {service}", size_hint_x=0.3, halign="left", valign="middle"))
+                credential_layout.add_widget(
+                    Label(text=f"Service: {service}", size_hint_x=0.3, halign="left", valign="middle"))
                 credential_layout.add_widget(user_label)
                 credential_layout.add_widget(password_label)
                 credential_layout.add_widget(toggle_button)
@@ -133,8 +145,8 @@ class CredentialsScreen(Screen):
 
     def toggle_visibility(self, encrypted_user, encrypted_password, hmac_user, hmac_password, user_label, password_label, key, salt, button):
         if user_label.text == "****" and password_label.text == "****":
-            user_verification = verify_hmac(hmac_user, encrypted_user)
-            password_verification = verify_hmac(hmac_password, encrypted_password)
+            user_verification = verify_hmac(hmac_user, encrypted_user, salt)
+            password_verification = verify_hmac(hmac_password, encrypted_password, salt)
 
             logger.log_hmac_verification("Username", user_verification)
             logger.log_hmac_verification("Password", password_verification)
@@ -151,7 +163,7 @@ class CredentialsScreen(Screen):
 
                 logger.log_decrypted_data("Decrypted username", decrypted_user)
                 logger.log_decrypted_data("Decrypted password", decrypted_password)
-                logger.log_separator()                
+                logger.log_separator()
                 logger.log_key_salt(key, salt)
                 logger.log_separator()
 
