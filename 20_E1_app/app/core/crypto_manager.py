@@ -1,26 +1,39 @@
 import base64
 import os
-
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives import hashes, padding, serialization
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from keys.key_utils import load_private_key
 
+def generate_key(salt: bytes) -> bytes:
+    # 1. Cargar la clave privada genérica
+    private_key = load_private_key()
 
-def generate_key(password: str, salt: bytes) -> bytes:
+    # 2. Extraer los bytes de la clave privada para derivación
+    private_key_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    # 3. Usar PBKDF2HMAC con la clave privada y el salt proporcionado
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
-        length=32,
+        length=32,  # Longitud de la clave generada
         salt=salt,
         iterations=100000,
         backend=default_backend()
     )
-    return kdf.derive(password.encode())
+
+    # 4. Derivar la clave final
+    derived_key = kdf.derive(private_key_bytes)
+
+    return derived_key
 
 
 def encrypt_data(plaintext: str, key: bytes) -> str:
-    iv = os.urandom(16)  
+    iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
 

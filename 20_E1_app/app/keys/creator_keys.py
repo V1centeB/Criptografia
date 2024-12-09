@@ -8,9 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-
-def generate_deterministic_key(seed: int) -> bytes:
-    salt = b"fixed_salt_value"
+def generate_deterministic_key(seed: int, salt: bytes) -> bytes:
     random.seed(seed)
     reproducible_number = random.randint(0, 1_000_000)
     seed_str = str(reproducible_number)
@@ -44,7 +42,8 @@ def generate_keys():
             )
         )
 
-    clave_cifrado = generate_deterministic_key(42)
+    salt = os.urandom(16)
+    clave_cifrado = generate_deterministic_key(42, salt)
 
     iv = os.urandom(12)
     cipher = Cipher(algorithms.AES(clave_cifrado), modes.GCM(iv), backend=default_backend())
@@ -59,9 +58,8 @@ def generate_keys():
     encrypted_private_key = encryptor.update(private_key_bytes) + encryptor.finalize()
 
     with open("keys/clave_privada_encriptada.pem", "wb") as private_file:
-        private_file.write(iv + encryptor.tag + encrypted_private_key)
+        private_file.write(salt + iv + encryptor.tag + encrypted_private_key)
 
-    #todo Mostrar mensaje de éxito a través del Logger
     print("Claves generadas y guardadas con éxito en la carpeta 'keys'.")
 
 if __name__ == "__main__":

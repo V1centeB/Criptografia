@@ -5,7 +5,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-def generate_hmac_key(password: str, salt: bytes) -> bytes:
+def generate_hmac_key(key: str, salt: bytes) -> bytes:
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
@@ -13,7 +13,7 @@ def generate_hmac_key(password: str, salt: bytes) -> bytes:
         iterations=100000,
         backend=default_backend()
     )
-    return kdf.derive(password.encode())
+    return kdf.derive(key.encode())
 
 def generate_hmac(data, salt=None):
     key = generate_hmac_key(data, salt)

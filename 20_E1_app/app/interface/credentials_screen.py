@@ -1,7 +1,7 @@
-from core.crypto_manager import generate_key, encrypt_data, decrypt_data
 from core.db_manager import DBManager
 from core.hmac_manager import generate_hmac, verify_hmac
 from core.security_logger import SecurityLogger
+from core.crypto_manager import generate_key, encrypt_data, decrypt_data
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
@@ -57,7 +57,7 @@ class CredentialsScreen(Screen):
         if service and service_user and service_password:
             salt = f"{username}{service_user}".encode('utf-8')
 
-            key = generate_key(user_password, salt)
+            key = generate_key(salt)
 
             # Cifrado
             encrypted_user = encrypt_data(service_user, key)
@@ -84,6 +84,7 @@ class CredentialsScreen(Screen):
             show_popup("Error", "Please fill out all fields.")
 
     def view_credentials(self, instance):
+
         username = self.manager.get_screen('login').username.text
         user_password = self.manager.get_screen('login').password.text  # Contraseña del usuario
         db_manager = DBManager()
@@ -102,7 +103,7 @@ class CredentialsScreen(Screen):
                 salt = credential[6].encode('utf-8')
 
                 # Generar la clave usando la contraseña del usuario y el salt
-                key = generate_key(user_password, salt)
+                key = generate_key(salt)
 
                 credential_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint_y=None, height=40)
 
@@ -144,6 +145,7 @@ class CredentialsScreen(Screen):
             show_popup("No Credentials", "No credentials found for this user.")
 
     def toggle_visibility(self, encrypted_user, encrypted_password, hmac_user, hmac_password, user_label, password_label, key, salt, button):
+
         if user_label.text == "****" and password_label.text == "****":
             user_verification = verify_hmac(hmac_user, encrypted_user, salt)
             password_verification = verify_hmac(hmac_password, encrypted_password, salt)
