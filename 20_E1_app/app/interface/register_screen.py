@@ -1,8 +1,7 @@
 import re
-
 from core.auth import Auth
 from core.db_manager import DBManager
-from core.pki_manager import issue_user_certificate
+from core.pki_manager import setup_certificate_chain, issue_user_certificate
 from core.security_logger import SecurityLogger
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -28,7 +27,6 @@ def show_popup(title, message):
 class RegisterScreen(Screen):
     def __init__(self, **kwargs):
         super(RegisterScreen, self).__init__(**kwargs)
-
         self.db_manager = DBManager()
 
         layout = BoxLayout(orientation='vertical', padding=10)
@@ -89,9 +87,13 @@ class RegisterScreen(Screen):
 
         if self.db_manager.add_user(username, hashed_password, email):
             try:
-                # Emitir certificado para el usuario
+                # Preparar la cadena de certificados
+                setup_certificate_chain()
+
+                # Emitir el certificado del usuario
                 issue_user_certificate(username)
-                show_popup("Registration Success", "User registered successfully.")
+
+                show_popup("Registration Success", "User registered successfully with certificate.")
                 self.manager.current = 'login'
             except Exception as e:
                 show_popup("Registration Error", f"Failed to generate certificate: {e}")
@@ -100,3 +102,18 @@ class RegisterScreen(Screen):
 
     def go_to_login(self, instance):
         self.manager.current = 'login'
+
+
+from core.pki_manager import generate_user_cert
+
+# Example usage in registration flow
+def on_register_user(username, email):
+    # Existing registration logic
+    print(f"Registering user {username} with email {email}...")
+
+    # Generate certificate for the user
+    try:
+        generate_user_cert(username, email)
+        print(f"Certificate successfully generated for {username}.")
+    except Exception as e:
+        print(f"Failed to generate certificate for {username}: {str(e)}")

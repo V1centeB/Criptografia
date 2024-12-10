@@ -6,11 +6,9 @@ from kivy.uix.button import Button
 from kivy.uix.screenmanager import Screen
 from kivy.uix.popup import Popup
 from core.db_manager import DBManager
-from core.email_manager import send_verification_token, generate_temporary_token
-from core.auth import Auth
 from core.pki_manager import verify_user_certificate
-
-
+from core.email_manager import send_verification_token
+from core.auth import Auth
 
 def show_popup(title, message):
     layout = BoxLayout(orientation='vertical')
@@ -31,7 +29,7 @@ class LoginScreen(Screen):
     def __init__(self, **kwargs):
         super(LoginScreen, self).__init__(**kwargs)
         self.db_manager = DBManager()
-        
+
         layout = BoxLayout(orientation='vertical', padding=10)
 
         self.username = TextInput(hint_text='Username', multiline=False)

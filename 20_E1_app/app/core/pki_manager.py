@@ -1,200 +1,144 @@
 import os
-from datetime import datetime, timedelta
+import subprocess
+from core.security_logger import SecurityLogger
 
-import cryptography.x509 as x509
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.x509 import NameOID
+logger = SecurityLogger()
 
+# Rutas de certificados y claves
+AC1_DIR = "AC1"
+AC2_DIR = "AC2"
+USER_DIR = "A"
 
-def initialize_pki_structure():
+def setup_certificate_chain():
     """
-    Crea la estructura de directorios necesaria para la PKI.
+    Prepara la cadena de certificados concatenando AC1 y AC2.
     """
-    directories = ["keys/AC1", "keys/AC2", "keys/users"]
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
+    try:
+        ac1_cert_path = os.path.join(AC1_DIR, "ac1cert.pem")
+        ac2_cert_path = os.path.join(AC2_DIR, "ac2cert.pem")
+        certs_chain_path = os.path.join(USER_DIR, "certs.pem")
 
+        with open(certs_chain_path, "wb") as certs_file:
+            for cert_path in [ac1_cert_path, ac2_cert_path]:
+                with open(cert_path, "rb") as cert_file:
+                    certs_file.write(cert_file.read())
 
-def initialize_pki():
-    if not os.path.exists("keys/AC1/certificate.pem"):
-        create_ca_root()
-    if not os.path.exists("keys/AC2/certificate.pem"):
-        create_ca_subordinate()
-
-
-def create_ca_root():
-    """
-    Genera la CA raíz (AC1) y guarda su clave privada y certificado.
-    """
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_key = private_key.public_key()
-
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, u"ES"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"CA Root"),
-        x509.NameAttribute(NameOID.COMMON_NAME, u"AC1")
-    ])
-    certificate = x509.CertificateBuilder().subject_name(
-        subject).issuer_name(
-        issuer).public_key(
-        public_key).serial_number(
-        x509.random_serial_number()).not_valid_before(
-        datetime.utcnow()).not_valid_after(
-        datetime.utcnow() + timedelta(days=3650)
-    ).add_extension(
-        x509.BasicConstraints(ca=True, path_length=None), critical=True
-    ).sign(private_key, hashes.SHA256())
-
-    # Guardar claves y certificado
-    with open("keys/AC1/private_key.pem", "wb") as f:
-        f.write(private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ))
-    with open("keys/AC1/certificate.pem", "wb") as f:
-        f.write(certificate.public_bytes(serialization.Encoding.PEM))
-
-    print("CA raíz (AC1) creada con éxito.")
-
-
-def create_ca_subordinate():
-    """
-    Genera la CA subordinada (AC2) y la firma con la CA raíz (AC1).
-    """
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_key = private_key.public_key()
-
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, u"ES"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"CA Subordinate"),
-        x509.NameAttribute(NameOID.COMMON_NAME, u"AC2")
-    ])
-    csr = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(
-        private_key, hashes.SHA256()
-    )
-
-    with open("keys/AC1/private_key.pem", "rb") as f:
-        ca_private_key = serialization.load_pem_private_key(f.read(), None)
-    with open("keys/AC1/certificate.pem", "rb") as f:
-        ca_cert = x509.load_pem_x509_certificate(f.read())
-
-    certificate = x509.CertificateBuilder().subject_name(
-        csr.subject).issuer_name(
-        ca_cert.subject).public_key(
-        public_key).serial_number(
-        x509.random_serial_number()).not_valid_before(
-        datetime.utcnow()).not_valid_after(
-        datetime.utcnow() + timedelta(days=3650)
-    ).add_extension(
-        x509.BasicConstraints(ca=True, path_length=0), critical=True
-    ).sign(ca_private_key, hashes.SHA256())
-
-    # Guardar claves y certificado
-    with open("keys/AC2/private_key.pem", "wb") as f:
-        f.write(private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ))
-    with open("keys/AC2/certificate.pem", "wb") as f:
-        f.write(certificate.public_bytes(serialization.Encoding.PEM))
-
-    print("CA subordinada (AC2) creada con éxito.")
+        logger.logger.info("Cadena de certificados preparada.")
+    except Exception as e:
+        logger.log_pki_error("Preparación de la cadena de certificados", e)
+        raise e
 
 
 def issue_user_certificate(username):
     """
-    Genera un certificado para el usuario firmado por la CA subordinada (AC2).
+    Genera un certificado para el usuario firmado por AC2.
     """
-    # 1. Generar claves para el usuario
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_key = private_key.public_key()
+    try:
+        # Rutas para claves y certificados de usuario
+        user_key_path = os.path.join(USER_DIR, f"{username}_key.pem")
+        user_cert_path = os.path.join(USER_DIR, f"{username}_cert.pem")
+        cert_request_path = os.path.join(USER_DIR, f"{username}_req.pem")
+        ac2_config_path = os.path.join(AC2_DIR, "AC2-38114.cnf")
 
-    # 2. Crear la solicitud de certificado (CSR) para el usuario
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, u"ES"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"User"),
-        x509.NameAttribute(NameOID.COMMON_NAME, username)
-    ])
-    csr = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(
-        private_key, hashes.SHA256()
-    )
+        # Generar clave privada y solicitud de certificado (CSR) para el usuario
+        subprocess.run([
+            "openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
+            "-keyout", user_key_path, "-out", cert_request_path,
+            "-subj", f"/C=ES/O=Users/OU=Department/CN={username}"
+        ], check=True)
 
-    # 3. Cargar la clave privada y certificado de la CA subordinada (AC2)
-    with open("keys/AC2/private_key.pem", "rb") as f:
-        ca_private_key = serialization.load_pem_private_key(f.read(), None)
-    with open("keys/AC2/certificate.pem", "rb") as f:
-        ca_cert = x509.load_pem_x509_certificate(f.read())
+        logger.logger.info(f"Solicitud de certificado generada para {username}.")
 
-    # 4. Emitir el certificado para el usuario
-    certificate = x509.CertificateBuilder().subject_name(
-        csr.subject).issuer_name(
-        ca_cert.subject).public_key(
-        public_key).serial_number(
-        x509.random_serial_number()).not_valid_before(
-        datetime.utcnow()).not_valid_after(
-        datetime.utcnow() + timedelta(days=365)  # Validez de 1 año
-    ).add_extension(
-        x509.BasicConstraints(ca=False, path_length=None), critical=True
-    ).sign(ca_private_key, hashes.SHA256())
+        # Firmar el CSR con AC2 para generar el certificado del usuario
+        subprocess.run([
+            "openssl", "ca", "-config", ac2_config_path,
+            "-in", cert_request_path, "-out", user_cert_path, "-batch"
+        ], check=True)
 
-    # 5. Guardar claves y certificado del usuario
-    user_dir = f"keys/users/{username}"
-    os.makedirs(user_dir, exist_ok=True)
+        logger.logger.info(f"Certificado emitido para {username} y firmado por AC2.")
+    except subprocess.CalledProcessError as e:
+        logger.log_pki_error(f"Error al emitir certificado para '{username}'", e)
+        raise e
+    except Exception as e:
+        logger.log_pki_error(f"Error general al emitir certificado para '{username}'", e)
+        raise e
 
-    with open(f"{user_dir}/{username}_private_key.pem", "wb") as f:
-        f.write(private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ))
-    with open(f"{user_dir}/{username}_certificate.pem", "wb") as f:
-        f.write(certificate.public_bytes(serialization.Encoding.PEM))
-
-    print(f"Certificado emitido y almacenado para el usuario '{username}'.")
 
 def verify_user_certificate(username):
     """
-    Verifica el certificado de un usuario contra la CA subordinada (AC2).
+    Verifica el certificado de un usuario contra la jerarquía AC2 -> AC1.
     """
     try:
-        # Cargar el certificado del usuario
-        with open(f"keys/users/{username}/{username}_certificate.pem", "rb") as f:
-            user_cert = x509.load_pem_x509_certificate(f.read())
+        user_cert_path = os.path.join(USER_DIR, f"{username}_cert.pem")
+        certs_chain_path = os.path.join(USER_DIR, "certs.pem")
 
-        # Cargar el certificado de la CA subordinada (AC2)
-        with open("keys/AC2/certificate.pem", "rb") as f:
-            ca_cert = x509.load_pem_x509_certificate(f.read())
-
-        # Verificar que el certificado del usuario esté firmado por AC2
-        ca_cert.public_key().verify(
-            user_cert.signature,
-            user_cert.tbs_certificate_bytes,
-            padding.PKCS1v15(),
-            user_cert.signature_hash_algorithm
+        # Verificar el certificado del usuario contra la cadena de confianza
+        result = subprocess.run(
+            ["openssl", "verify", "-CAfile", certs_chain_path, user_cert_path],
+            capture_output=True,
+            text=True
         )
 
-        print(f"El certificado del usuario '{username}' es válido.")
-        return True
+        if "OK" in result.stdout:
+            logger.log_certificate_verified(username, True)
+            return True
+        else:
+            logger.log_certificate_verified(username, False)
+            return False
     except Exception as e:
-        print(f"Error al verificar el certificado del usuario '{username}': {e}")
+        logger.log_pki_error(f"Verificación de certificado para {username}", e)
         return False
+
 
 def authenticate_user(username, password, db_manager):
     """
     Autentica a un usuario verificando sus credenciales y su certificado.
     """
     if not db_manager.verify_credentials(username, password):
-        print("Credenciales incorrectas.")
+        logger.logger.info("Credenciales incorrectas.")
         return False
 
     if not verify_user_certificate(username):
-        print("El certificado del usuario no es válido.")
+        logger.logger.info("El certificado del usuario no es válido.")
         return False
 
-    print("Usuario autenticado con éxito.")
+    logger.logger.info("Usuario autenticado con éxito.")
     return True
 
+
+import os
+import subprocess
+
+# Base directory for app structure
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def generate_user_cert(username, email):
+    user_dir = os.path.join(BASE_DIR, "..", "A")
+    ac2_dir = os.path.join(BASE_DIR, "..", "AC2")
+
+    # Paths for user keys and certificates
+    user_key = os.path.join(user_dir, f"{username}key.pem")
+    user_req = os.path.join(user_dir, f"{username}req.pem")
+    user_cert = os.path.join(user_dir, f"{username}cert.pem")
+
+    # Generate RSA key and certificate request
+    subprocess.run([
+        "openssl", "req", "-newkey", "rsa:1024", "-days", "360", "-sha1",
+        "-keyout", user_key, "-out", user_req,
+        "-subj", f"/C=ES/ST=MADRID/O=UC3M/CN={username}/emailAddress={email}"
+    ], check=True)
+
+    # Move request to AC2 directory
+    subprocess.run(["mv", user_req, os.path.join(ac2_dir, "solicitudes")], check=True)
+
+    # Generate certificate using AC2
+    subprocess.run([
+        "openssl", "ca", "-in", os.path.join(ac2_dir, "solicitudes", f"{username}req.pem"),
+        "-notext", "-config", os.path.join(ac2_dir, "AC2-38114.cnf"),
+        "-out", os.path.join(ac2_dir, "nuevoscerts", f"{username}cert.pem")
+    ], check=True)
+
+    # Move certificate back to user directory
+    subprocess.run(["mv", os.path.join(ac2_dir, "nuevoscerts", f"{username}cert.pem"), user_cert], check=True)
+    print(f"Certificate for {username} generated successfully.")
 
