@@ -1,14 +1,15 @@
 import re
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.textinput import TextInput
-from kivy.uix.label import Label
-from kivy.uix.button import Button
-from kivy.uix.screenmanager import Screen
-from kivy.uix.popup import Popup
+
+from core.auth import Auth
 from core.db_manager import DBManager
-from core.auth import Auth  
-from core.security_logger import SecurityLogger  
+from core.pki_manager import issue_user_certificate
+from core.security_logger import SecurityLogger
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.popup import Popup
+from kivy.uix.screenmanager import Screen
+from kivy.uix.textinput import TextInput
 
 logger = SecurityLogger()
 
@@ -27,9 +28,9 @@ def show_popup(title, message):
 class RegisterScreen(Screen):
     def __init__(self, **kwargs):
         super(RegisterScreen, self).__init__(**kwargs)
-        
+
         self.db_manager = DBManager()
-        
+
         layout = BoxLayout(orientation='vertical', padding=10)
 
         self.username = TextInput(hint_text='Username', multiline=False)
@@ -58,11 +59,11 @@ class RegisterScreen(Screen):
     def is_valid_password(self, password):
         if len(password) < 8:
             return False
-        if not re.search(r'[A-Z]', password):  
+        if not re.search(r'[A-Z]', password):
             return False
-        if not re.search(r'[a-z]', password):  
+        if not re.search(r'[a-z]', password):
             return False
-        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):  
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
             return False
         return True
 
@@ -75,7 +76,7 @@ class RegisterScreen(Screen):
         if email != email_verification:
             show_popup("Registration Error", "Email and verification do not match.")
             return
-        
+
         if not self.is_valid_email(email):
             show_popup("Registration Error", "Invalid email format.")
             return
@@ -87,8 +88,13 @@ class RegisterScreen(Screen):
         hashed_password = Auth.hash_password(password)
 
         if self.db_manager.add_user(username, hashed_password, email):
-            show_popup("Registration Success", "User registered successfully.")
-            self.manager.current = 'login'
+            try:
+                # Emitir certificado para el usuario
+                issue_user_certificate(username)
+                show_popup("Registration Success", "User registered successfully.")
+                self.manager.current = 'login'
+            except Exception as e:
+                show_popup("Registration Error", f"Failed to generate certificate: {e}")
         else:
             show_popup("Registration Error", "User already exists.")
 

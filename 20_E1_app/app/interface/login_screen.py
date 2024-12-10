@@ -8,6 +8,9 @@ from kivy.uix.popup import Popup
 from core.db_manager import DBManager
 from core.email_manager import send_verification_token, generate_temporary_token
 from core.auth import Auth
+from core.pki_manager import verify_user_certificate
+
+
 
 def show_popup(title, message):
     layout = BoxLayout(orientation='vertical')
@@ -54,18 +57,24 @@ class LoginScreen(Screen):
         if user:
             stored_password = user[1]
             if Auth.check_password(password, stored_password):
-                LoginScreen.current_user = username
-                LoginScreen.user_password = password
-                email = user[2]
+                try:
+                    # Verificar el certificado del usuario
+                    if verify_user_certificate(username):
+                        LoginScreen.current_user = username
+                        LoginScreen.user_password = password
+                        email = user[2]
 
-                token = send_verification_token(email)
-                if token:
-
-                    verify_screen = self.manager.get_screen('verify')
-                    verify_screen.set_token(token)  
-                    self.manager.current = 'verify'
-                else:
-                    show_popup("Error", "Failed to send verification token.")
+                        token = send_verification_token(email)
+                        if token:
+                            verify_screen = self.manager.get_screen('verify')
+                            verify_screen.set_token(token)
+                            self.manager.current = 'verify'
+                        else:
+                            show_popup("Error", "Failed to send verification token.")
+                    else:
+                        show_popup("Error", "User certificate validation failed.")
+                except Exception as e:
+                    show_popup("Error", f"Failed to verify user certificate: {e}")
             else:
                 show_popup('Error', 'Incorrect username or password')
         else:

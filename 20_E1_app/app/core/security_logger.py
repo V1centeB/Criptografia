@@ -24,3 +24,16 @@ class SecurityLogger:
     def log_hmac_verification(self, data_type, result):
         status = "exitosa" if result else "fallida"
         self.logger.info(f"Verificación HMAC para {data_type}: {status}")
+
+    def log_ca_creation(self, ca_name):
+        self.logger.info(f"CA '{ca_name}' creada con éxito.")
+
+    def log_certificate_issued(self, username):
+        self.logger.info(f"Certificado emitido para el usuario '{username}'.")
+
+    def log_certificate_verified(self, username, result):
+        status = "válido" if result else "inválido"
+        self.logger.info(f"Certificado del usuario '{username}' es {status}.")
+
+    def log_pki_error(self, operation, error):
+        self.logger.error(f"Error durante '{operation}': {error}")
