@@ -1,6 +1,8 @@
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
+from keys.key_utils import load_public_key, load_private_key
+
 
 
 def generate_rsa_key_pair():
@@ -16,11 +18,14 @@ def generate_rsa_key_pair():
     return private_key, public_key
 
 
-def sign_data(data: bytes, private_key):
-    """
-    Firma digitalmente los datos usando la clave privada.
-    """
-    signature = private_key.sign(
+PRIVATE_KEY = load_private_key()
+PUBLIC_KEY = load_public_key()
+
+def sign_data(data):
+    # Convertir datos a bytes si no lo están
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    return PRIVATE_KEY.sign(
         data,
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),
@@ -28,15 +33,13 @@ def sign_data(data: bytes, private_key):
         ),
         hashes.SHA256()
     )
-    return signature
 
-
-def verify_signature(data: bytes, signature: bytes, public_key):
-    """
-    Verifica la firma digital de los datos usando la clave pública.
-    """
+def verify_signature(data, signature):
+    # Convertir datos a bytes si no lo están
+    if isinstance(data, str):
+        data = data.encode('utf-8')
     try:
-        public_key.verify(
+        PUBLIC_KEY.verify(
             signature,
             data,
             padding.PSS(
@@ -47,8 +50,9 @@ def verify_signature(data: bytes, signature: bytes, public_key):
         )
         return True
     except Exception as e:
-        print(f"Error al verificar la firma: {e}")
+        print(f"Signature verification failed: {e}")
         return False
+
 
 
 def save_key_to_file(key, filepath: str, is_private: bool = True):

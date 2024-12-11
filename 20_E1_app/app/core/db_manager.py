@@ -25,6 +25,7 @@ class DBManager:
             hmac_user TEXT,
             hmac_password TEXT,
             salt TEXT,
+            signature TEXT,
             PRIMARY KEY (username, service),
             FOREIGN KEY (username) REFERENCES users(username)
         )
@@ -49,12 +50,15 @@ class DBManager:
     def get_user_credentials(self, username):
         self.cursor.execute('SELECT * FROM credentials WHERE username=?', (username,))
         return self.cursor.fetchall()
-    
-    def store_credentials(self, username, service, service_user, encrypted_password, hmac_user, hmac_password, salt):
-        self.cursor.execute('''
-        INSERT INTO credentials (username, service, service_user, encrypted_password, hmac_user, hmac_password, salt)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(username, service) DO UPDATE 
-        SET service_user=excluded.service_user, encrypted_password=excluded.encrypted_password, hmac_user=excluded.hmac_user, hmac_password=excluded.hmac_password, salt=excluded.salt
-        ''', (username, service, service_user, encrypted_password, hmac_user, hmac_password, salt))
+
+    def store_credentials(self, username, service, service_user, encrypted_password, hmac_user, hmac_password, salt,
+                          signature):
+        query = """
+            INSERT INTO credentials (username, service, service_user, encrypted_password, hmac_user, hmac_password, salt, signature)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(username, service) DO UPDATE 
+            SET service_user=excluded.service_user, encrypted_password=excluded.encrypted_password, hmac_user=excluded.hmac_user, hmac_password=excluded.hmac_password, salt=excluded.salt, signature=excluded.signature
+        """
+        self.cursor.execute(query, (
+        username, service, service_user, encrypted_password, hmac_user, hmac_password, salt, signature))
         self.conn.commit()

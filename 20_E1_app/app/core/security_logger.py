@@ -37,3 +37,15 @@ class SecurityLogger:
 
     def log_pki_error(self, operation, error):
         self.logger.error(f"Error durante '{operation}': {error}")
+
+    def log_signature_creation(self, message, signature):
+        if isinstance(signature, bytes):
+            signature = signature.hex()  # Convertir la firma a un formato legible (hexadecimal)
+        log_message = f"{message}: {signature}"
+        self.logger.info(log_message)  # Usar el logger configurado para registrar el mensaje
+
+    def log_signature_verification(self, message, result):
+        status = "válida" if result else "inválida"
+        self.logger.info(f"{message}: La firma es {status}.")
+
+
